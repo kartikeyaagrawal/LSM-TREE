@@ -1,5 +1,5 @@
-from ss_table import SSTable
-from lsm_tree import LSMTree
+from component.ss_table import SSTable
+from component.lsm_tree import LSMTree
 
 # Example usage
 if __name__ == "__main__":
