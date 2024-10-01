@@ -1,62 +1,82 @@
+from .bloom_filter import BloomFilter
+from .sparse_index import SparseIndex
+from .datablock import DataBlock
+
 import pickle
 
-from .bloom_filter import BloomFilter
-
-
-class SparseIndex:
-
-    def __init__(self, file_name) -> None:
-        self.index = []
-        self.file_name = file_name
-
-    def add_index(self, key_offset_pair):
-        self.index.append(key_offset_pair)
-
-    @staticmethod
-    def load_from_disk(filename):
-        with open(filename, 'rb') as f:
-            array = pickle.load(f)
-            sstable = SparseIndex()
-            return sstable
-  
-    def save_to_disk(self):
-        with open(self.file_name, 'wb') as f:
-            pickle.dump(self.index, f)
-
-
-
 class SSTable:
-    def __init__(self, data, filename, block_size = 4):
-        self.data = dict(data)  # Store key-value pairs as a dictionary
-        self.bloom_filter = BloomFilter()
-        for key in self.data:
-            self.bloom_filter.add(key)  # Add keys to Bloom filter
-        self.filename = filename
+
+    def __init__(self, filename, block_size=4):
+        """Initialize with just the file name and block size."""
+        self.filename = f"{filename}_sstable.pkl"
+        self.bloom_filter = BloomFilter(file_name=filename)  # Bloom filter stored to disk
         self.block_size = block_size
-        self.save_to_disk()  # Save SSTable to disk
+        self.sparse_index = None  # The sparse index will be loaded when needed
 
-    def save_to_disk(self):
-        offset = 0 
-        sparse_index = SparseIndex()
+    def save_to_disk(self, data):
+        """Save the SSTable data, bloom filter, and sparse index to disk."""
+        offset = 0
+        sparse_index = SparseIndex(file_name=self.filename)
         with open(self.filename, 'wb') as f:
-            for i , (key, value) in self.data.items():
-                pickle.dump((key, value), f)
-                if i%self.block_size ==0:
-                    offset = f.tell()
-                    sparse_index.add_index((key,offset))
-        
-        sparse_index.save_to_disk()
+            block = DataBlock(size=self.block_size, file=f)
 
-    @staticmethod
-    def load_from_disk(filename):
-        with open(filename, 'rb') as f:
-            data, bloom_bits = pickle.load(f)
-            sstable = SSTable(data, filename)
-            sstable.bloom_filter.bits = bloom_bits
-            return sstable
+            for i, (key, value) in enumerate(data):
+                block.add((key, value))
+                self.bloom_filter.add(key)  # Add keys to Bloom filter
+                # Add to sparse index when block starts
+                if i % self.block_size == 0:
+                    offset = f.tell()
+                    sparse_index.add_index((key, offset))
+
+            # Flush any remaining data in the block
+            block.flush()
+
+        # Save Bloom filter and sparse index to disk
+        self.bloom_filter.save_to_disk()
+        sparse_index.save_to_disk()
+        self.sparse_index = sparse_index  # Optional: keep the sparse index in memory
+
+    def load_sparse_index(self):
+        """Lazy load the sparse index from disk when needed."""
+        if self.sparse_index is None:
+            self.sparse_index = SparseIndex.load_from_disk(f"{self.filename}_sparse.pkl")
+
+    def get_block_by_offset(self, offset):
+        """Retrieve a block of key-value pairs from the file using the offset."""
+        with open(self.filename, 'rb') as f:
+            data_block = DataBlock(size=self.block_size)
+            block = data_block.read_block(f, offset)
+            return block
 
     def get(self, key):
-        return self.data.get(key)
+        """Lazy load the SSTable and retrieve the value for a specific key."""
+        # Load the sparse index if not already loaded
+
+        # Use the bloom filter to check for key presence
+        if not self.bloom_filter.might_contain(key):
+            return None  # If bloom filter says key isn't there, avoid disk I/O
+
+        self.load_sparse_index()
+        
+        # Use sparse index to find the block containing the key
+        for i in range(len(self.sparse_index.index)):
+            current_key, offset = self.sparse_index.index[i]
+
+            # If key is less than current key, check previous block
+            if current_key > key and i > 0:
+                _, previous_offset = self.sparse_index.index[i - 1]
+                block = self.get_block_by_offset(previous_offset)
+                return self.search_block(block, key)
+
+        return None  # Key not found
+
+    def search_block(self, block, key):
+        """Search through a block for the given key."""
+        for k, v in block:
+            if k == key:
+                return v
+        return None
 
     def might_contain(self, key):
+        """Check if the key might be present using the bloom filter."""
         return self.bloom_filter.might_contain(key)

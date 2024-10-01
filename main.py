@@ -3,7 +3,7 @@ from component.lsm_tree import LSMTree
 
 # Example usage
 if __name__ == "__main__":
-    lsm_tree = LSMTree(memtable_limit=3)
+    lsm_tree = LSMTree(memtable_limit=8)
 
     # Insert some key-value pairs
     lsm_tree.insert("key0", "value0")

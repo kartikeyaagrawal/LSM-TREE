@@ -1,18 +1,21 @@
-from mem_table import Memtable
-from ss_table import SSTable
+from .mem_table import Memtable
+from .ss_table import SSTable
+import time
 
 class LSMTree:
-    def __init__(self, memtable_limit=3):
+    def __init__(self, memtable_limit=8):
         self.memtable = Memtable()
-        self.sstables = []
+        self.sstable_filenames = []  # Only store SSTable file names
         self.memtable_limit = memtable_limit
 
     def insert(self, key, value):
         self.memtable.insert(key, value)
         if len(self.memtable.data) >= self.memtable_limit:
             sstable_data = self.memtable.flush()
-            filename = f'sstable_{len(self.sstables)}.pkl'
-            self.sstables.append(SSTable(sstable_data, filename))
+            filename = f'{len(self.sstable_filenames)}'
+            sstable = SSTable(filename)
+            sstable.save_to_disk(sstable_data)  # Save the SSTable to disk
+            self.sstable_filenames.append(filename)  # Only save filename
             self.memtable = Memtable()  # Reset memtable
 
     def get(self, key):
@@ -20,12 +23,14 @@ class LSMTree:
         value = self.memtable.get(key)
         if value is not None:
             return value
-        
+
         # If not found in memtable, check the SSTables
-        for sstable in reversed(self.sstables):  # Start from the latest
-            if sstable.might_contain(key):  # Use Bloom filter to check presence
-                value = sstable.get(key)
-                if value is not None:
-                    return value
-        
+        for filename in reversed(self.sstable_filenames):  # Start from the latest
+            sstable = SSTable(filename)  # Load SSTable object (no data loaded yet)
+                  
+            value = sstable.get(key)  # This will load the SSTable and search the key
+            if value is not None:
+                return value
+
         return None  # Key not found
+
