@@ -1,22 +1,27 @@
 from .mem_table import Memtable
 from .ss_table import SSTable
-import time
+from .level import Level
 
 class LSMTree:
-    def __init__(self, memtable_limit=8):
+    def __init__(self, memtable_limit=8, level_max_size=4):
         self.memtable = Memtable()
-        self.sstable_filenames = []  # Only store SSTable file names
         self.memtable_limit = memtable_limit
+        self.levels = [Level(0, level_max_size)]  # Initialize the first level with a max size
 
     def insert(self, key, value):
         self.memtable.insert(key, value)
         if len(self.memtable.data) >= self.memtable_limit:
             sstable_data = self.memtable.flush()
-            filename = f'{len(self.sstable_filenames)}'
+            filename = f'level_0_sstable_{len(Level.all_levels[0].files)}'
             sstable = SSTable(filename)
-            sstable.save_to_disk(sstable_data)  # Save the SSTable to disk
-            self.sstable_filenames.append(filename)  # Only save filename
-            self.memtable = Memtable()  # Reset memtable
+            sstable.save_to_disk(sstable_data)
+            self.memtable = Memtable()  # Reset the memtable
+            
+            # Now handle adding the SSTable to the level
+            new_file = Level.all_levels[0].add_file(filename)
+            if new_file:
+                self.levels.append(new_file)  # Add the new level if created
+
 
     def get(self, key):
         # Check in the memtable first

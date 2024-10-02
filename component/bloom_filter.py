@@ -6,7 +6,7 @@ class BloomFilter:
     def __init__(self, file_name, size=1000, hash_count=5):
         self.size = size
         self.hash_count = hash_count
-        self.bits = bitarray(size)
+        self.bits =  bitarray(size)
         self.bits.setall(0)
         self.file_name = f"{file_name}_bloom_filter.pkl"
         self.loaded = False  # Flag to check if the filter is loaded

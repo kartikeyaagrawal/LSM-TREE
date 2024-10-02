@@ -14,15 +14,11 @@ if __name__ == "__main__":
     lsm_tree.insert("key5", "value5")
     lsm_tree.insert("key6", "value6")
     lsm_tree.insert("key7", "value7")
+    lsm_tree.insert("key8", "value8")
 
 
     # Retrieve values
-    print(lsm_tree.get("key1"))  # Output: value1
-    print(lsm_tree.get("key2"))  # Output: value2
-    print(lsm_tree.get("key4"))  # Output: value4
+    # print(lsm_tree.get("key1"))  # Output: value1
+    # print(lsm_tree.get("key2"))  # Output: value2
+    # print(lsm_tree.get("key4"))  # Output: value4
     print(lsm_tree.get("key5"))  # Output: None (not found)
-
-    # Demonstrate loading SSTables from disk
-    for sstable in lsm_tree.sstables:
-        loaded_sstable = SSTable.load_from_disk(sstable.filename)
-        print(f"Loaded SSTable: {loaded_sstable.data}")

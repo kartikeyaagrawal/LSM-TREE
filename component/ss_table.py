@@ -1,17 +1,30 @@
 from .bloom_filter import BloomFilter
 from .sparse_index import SparseIndex
 from .datablock import DataBlock
+from ..constants import BLOCK_SIZE
 
 import pickle
+import bisect
 
 class SSTable:
 
-    def __init__(self, filename, block_size=4):
+    def __init__(self, filename, block_size=BLOCK_SIZE, simple_load_file=False):
         """Initialize with just the file name and block size."""
         self.filename = f"{filename}_sstable.pkl"
-        self.bloom_filter = BloomFilter(file_name=filename)  # Bloom filter stored to disk
+        if simple_load_file==True:
+            self.bloom_filter = None
+        else:
+            self.bloom_filter = BloomFilter(file_name=filename)  # Bloom filter stored to disk
         self.block_size = block_size
         self.sparse_index = None  # The sparse index will be loaded when needed
+
+    def load_entire_file_into_memory(self):
+        """Forcefully load the entire SSTable file into memory."""
+        memory_data = None
+        with open(self.filename, 'rb') as f:
+            memory_data = f.read()  # Read the entire SSTable file into memory
+        return memory_data
+        print(f"Loaded SSTable {self.filename} into memory.")
 
     def save_to_disk(self, data):
         """Save the SSTable data, bloom filter, and sparse index to disk."""
@@ -49,33 +62,62 @@ class SSTable:
             return block
 
     def get(self, key):
-        """Lazy load the SSTable and retrieve the value for a specific key."""
-        # Load the sparse index if not already loaded
-
+        """Lazy load the SSTable and retrieve the highest value lower than the specific key."""
         # Use the bloom filter to check for key presence
         if not self.bloom_filter.might_contain(key):
             return None  # If bloom filter says key isn't there, avoid disk I/O
 
         self.load_sparse_index()
-        
-        # Use sparse index to find the block containing the key
-        for i in range(len(self.sparse_index.index)):
-            current_key, offset = self.sparse_index.index[i]
 
-            # If key is less than current key, check previous block
-            if current_key > key and i > 0:
-                _, previous_offset = self.sparse_index.index[i - 1]
-                block = self.get_block_by_offset(previous_offset)
-                return self.search_block(block, key)
+        # Binary search on the sparse index to find the block containing the key
+        low, high = 0, len(self.sparse_index.index) - 1
+        block_offset = None
+
+        while low <= high:
+            mid = (low + high) // 2
+            current_key, offset = self.sparse_index.index[mid]
+
+            if current_key <= key:
+                block_offset = offset  # Update the highest key lower than the key
+                low = mid + 1  # Search right half
+            else:
+                high = mid - 1  # Search left half
+
+        if block_offset is not None:
+            # Retrieve the block and search for the key
+            block = self.get_block_by_offset(block_offset)
+            return self.search_block(block, key)
 
         return None  # Key not found
 
     def search_block(self, block, key):
-        """Search through a block for the given key."""
-        for k, v in block:
-            if k == key:
-                return v
-        return None
+        """Search through a block for the given key using binary search with a custom comparator."""
+        
+        # Define a custom comparator function
+        def compare(item, key):
+            # item is a tuple (k, v) from the block, key is the search key
+            if item[0] == key:
+                return 0
+            elif item[0] < key:
+                return -1
+            else:
+                return 1
+
+        # Binary search implementation with the custom comparator
+        low, high = 0, len(block) - 1
+        while low <= high:
+            mid = (low + high) // 2
+            cmp_result = compare(block[mid], key)
+
+            if cmp_result == 0:
+                return block[mid][1]  # Found the key, return the corresponding value
+            elif cmp_result < 0:
+                low = mid + 1  # Search right half
+            else:
+                high = mid - 1  # Search left half
+        
+        return None  # Key not found
+
 
     def might_contain(self, key):
         """Check if the key might be present using the bloom filter."""
