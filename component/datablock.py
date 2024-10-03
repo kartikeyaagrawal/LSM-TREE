@@ -20,11 +20,11 @@ class DataBlock:
             pickle.dump(self.block, self.file)
             self.block.clear()  # Clear the block after flushing
 
-    def read_block(self, file, offset):
+    def read_block(self, offset):
         """Read a block from the given offset."""
-        file.seek(offset)  # Move the file pointer to the offset
+        self.file.seek(offset)  # Move the file pointer to the offset
         try:
-            block = pickle.load(file)  # Load the entire block (list of key-value pairs)
+            block = pickle.load(self.file)  # Load the entire block (list of key-value pairs)
         except EOFError:
             block = []  # Return an empty block if end of file is reached
         return block

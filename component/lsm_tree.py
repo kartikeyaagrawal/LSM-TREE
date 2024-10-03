@@ -3,7 +3,7 @@ from .ss_table import SSTable
 from .level import Level
 
 class LSMTree:
-    def __init__(self, memtable_limit=8, level_max_size=4):
+    def __init__(self, memtable_limit=8, level_max_size=2):
         self.memtable = Memtable()
         self.memtable_limit = memtable_limit
         self.levels = [Level(0, level_max_size)]  # Initialize the first level with a max size
@@ -12,7 +12,7 @@ class LSMTree:
         self.memtable.insert(key, value)
         if len(self.memtable.data) >= self.memtable_limit:
             sstable_data = self.memtable.flush()
-            filename = f'level_0_sstable_{len(Level.all_levels[0].files)}'
+            filename = f'0_{len(Level.all_levels[0].files)}'
             sstable = SSTable(filename)
             sstable.save_to_disk(sstable_data)
             self.memtable = Memtable()  # Reset the memtable
@@ -30,7 +30,7 @@ class LSMTree:
             return value
 
         # If not found in memtable, check the SSTables
-        for filename in reversed(self.sstable_filenames):  # Start from the latest
+        for filename in reversed(Level.all_levels[0].files):  # Start from the latest
             sstable = SSTable(filename)  # Load SSTable object (no data loaded yet)
                   
             value = sstable.get(key)  # This will load the SSTable and search the key

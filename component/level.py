@@ -16,7 +16,7 @@ class Level:
         print(f"Added file {file} to level {self.level}")
 
         # If the total size exceeds the limit, perform compaction
-        if self.get_total_size() > self.max_size:
+        if self.get_total_size() >= self.max_size:
             new_file = self.compact()
             if new_file:
                 return self.move_file_to_next_level(new_file)  # Move to the next level if needed
@@ -59,18 +59,14 @@ class Level:
     def merge_sstables(self, next_level_files=None):
         """Merge multiple SSTable files into one based on the level."""
         
-        if self.level_number == 0:
+        if self.level == 0:
             # Special merging logic for Level 0 (merge starting from latest)
             print(f"Merging SSTables for Level 0: {self.files}")
             merged_data = self.merge_latest_sstables()
             
-            # Save merged data into the next level (Level 1)
-            # temp_sstable = SSTable('temp_level1_merge')
-            # temp_sstable.save_to_disk(merged_data)
-            
             # Add temp_sstable to the next level (Level 1)
             next_level = next_level_files or Level(1, self.max_size * 2)
-            next_level = self.merge_into_next_level(merged_data, next_level)
+            next_level = self.merge_into_next_level(merged_data, Level.add_file[self.level+1])
             return next_level
 
     def merge_latest_sstables(self):
@@ -80,7 +76,7 @@ class Level:
         # Read and merge SSTables starting from the latest
         for file in reversed(self.files):  # Start with the latest files first
             sstable = SSTable(file)
-            file_data = sstable.read_all_data()
+            file_data = sstable.load_entire_file_into_memory()
             for key, value in file_data:
                 if key not in merged_data:
                     merged_data[key] = value  # Add the latest data for this key
@@ -136,7 +132,7 @@ class Level:
             temp_index += 1
 
         if merged_data:
-            final_sstable = SSTable(f"final_merged_level{next_level.level_number}")
+            final_sstable = SSTable(f"final_merged_level{next_level.level}")
             final_sstable.save_to_disk(merged_data)
             next_level.add_file(final_sstable.filename)
 

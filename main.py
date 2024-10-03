@@ -16,6 +16,20 @@ if __name__ == "__main__":
     lsm_tree.insert("key7", "value7")
     lsm_tree.insert("key8", "value8")
 
+    # Additional key-value pairs
+    lsm_tree.insert("key9", "value9")
+    lsm_tree.insert("key10", "value10")
+    lsm_tree.insert("key11", "value11")
+    lsm_tree.insert("key12", "value12")
+    lsm_tree.insert("key13", "value13")
+    lsm_tree.insert("key14", "value14")
+    lsm_tree.insert("key15", "value15")
+    lsm_tree.insert("key16", "value16")
+    lsm_tree.insert("key17", "value17")
+    lsm_tree.insert("key18", "value18")
+    lsm_tree.insert("key19", "value19")
+
+
 
     # Retrieve values
     # print(lsm_tree.get("key1"))  # Output: value1

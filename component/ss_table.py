@@ -1,15 +1,14 @@
 from .bloom_filter import BloomFilter
 from .sparse_index import SparseIndex
 from .datablock import DataBlock
-from ..constants import BLOCK_SIZE
-
+from constants import BLOCK_SIZE
 import pickle
-import bisect
 
 class SSTable:
 
     def __init__(self, filename, block_size=BLOCK_SIZE, simple_load_file=False):
         """Initialize with just the file name and block size."""
+        self.level_name = filename
         self.filename = f"{filename}_sstable.pkl"
         if simple_load_file==True:
             self.bloom_filter = None
@@ -20,16 +19,26 @@ class SSTable:
 
     def load_entire_file_into_memory(self):
         """Forcefully load the entire SSTable file into memory."""
-        memory_data = None
+        datablocks = []
+        seek = 0
         with open(self.filename, 'rb') as f:
-            memory_data = f.read()  # Read the entire SSTable file into memory
-        return memory_data
+            while True:
+                try:
+                    # Load the next object
+                    obj = pickle.load(f)
+                    datablocks.extend(obj) #TO-DO  ERROR FILE ORDER 
+                    print(obj)  # Process the object (e.g., print it)
+                except EOFError:
+                    # End of file reached
+                    break
+        
         print(f"Loaded SSTable {self.filename} into memory.")
+        return datablocks
 
     def save_to_disk(self, data):
         """Save the SSTable data, bloom filter, and sparse index to disk."""
         offset = 0
-        sparse_index = SparseIndex(file_name=self.filename)
+        sparse_index = SparseIndex(file_name=self.level_name)
         with open(self.filename, 'wb') as f:
             block = DataBlock(size=self.block_size, file=f)
 
@@ -52,14 +61,13 @@ class SSTable:
     def load_sparse_index(self):
         """Lazy load the sparse index from disk when needed."""
         if self.sparse_index is None:
-            self.sparse_index = SparseIndex.load_from_disk(f"{self.filename}_sparse.pkl")
+            self.sparse_index = SparseIndex.load_from_disk(f"{self.level_name}_sparse.pkl")
 
     def get_block_by_offset(self, offset):
         """Retrieve a block of key-value pairs from the file using the offset."""
         with open(self.filename, 'rb') as f:
-            data_block = DataBlock(size=self.block_size)
-            block = data_block.read_block(f, offset)
-            return block
+            data_block = DataBlock(size=self.block_size, file=f).read_block(offset)
+            return data_block
 
     def get(self, key):
         """Lazy load the SSTable and retrieve the highest value lower than the specific key."""
